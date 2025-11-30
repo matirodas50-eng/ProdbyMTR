@@ -21,14 +21,8 @@ try {
   process.exit(1);
 }
 
-// Configurar email
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
+import { Resend } from 'resend';
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // 🔥 CAMBIO CRÍTICO: Webhook PRIMERO con raw body
 app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, res) => {
@@ -67,12 +61,12 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
       }
 
       // ENVIAR EMAIL AUTOMÁTICO
-      try {
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER,
-          to: session.customer_details.email,
-          subject: `✅ Tu compra en ProdByMTR - ${producto.nombre}`,
-          html: `
+     try {
+  await resend.emails.send({
+    from: 'ProdByMTR <onboarding@resend.dev>',
+    to: session.customer_details.email,
+    subject: `✅ Tu compra en ProdByMTR - ${producto.nombre}`,
+    html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <h1 style="color: #635bff;">¡Gracias por tu compra!</h1>
               
