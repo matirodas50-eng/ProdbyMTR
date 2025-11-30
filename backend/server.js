@@ -3,7 +3,6 @@ import Stripe from 'stripe';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import nodemailer from 'nodemailer';
 import Pedido from './models/Pedido.js';
 
 dotenv.config();
