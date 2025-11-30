@@ -30,96 +30,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Middleware
-app.use(cors({
-  origin: ['https://prodbymtr.netlify.app', 'http://localhost:3000'],
-  credentials: true
-}));
-app.use(express.json());
-
-// Datos de productos (podés mover a MongoDB después)
-const productos = {
-  'drumkit-essential': {
-    nombre: 'Drumkit Essential',
-    precio: 2500, // $25.00 en centavos
-    descargaUrl: 'https://drive.google.com/tu-enlace-drumkit'
-  },
-  'vocal-template': {
-    nombre: 'Vocal Chain Template', 
-    precio: 2500,
-    descargaUrl: 'https://drive.google.com/tu-enlace-vocal'
-  },
-  'plantillas-fl': {
-    nombre: 'Plantillas FL Studio',
-    precio: 3500,
-    descargaUrl: 'https://drive.google.com/tu-enlace-plantillas'
-  },
-  'bundle-completo': {
-    nombre: 'Bundle Completo',
-    precio: 5500, 
-    descargaUrl: 'https://drive.google.com/tu-enlace-bundle'
-  }
-};
-
-// 1. Endpoint para crear sesión de pago
-app.post('/api/crear-pago', async (req, res) => {
-  try {
-    const { productId } = req.body;
-    
-    if (!productos[productId]) {
-      return res.status(400).json({ error: 'Producto no encontrado' });
-    }
-
-    const producto = productos[productId];
-
-    // Crear sesión en Stripe
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: producto.nombre,
-              description: 'Producto digital - ProdByMTR'
-            },
-            unit_amount: producto.precio,
-          },
-          quantity: 1,
-        },
-      ],
-      mode: 'payment',
-      success_url: `${process.env.FRONTEND_URL}/success.html`,
-      cancel_url: `${process.env.FRONTEND_URL}/`,
-      metadata: {
-        product_id: productId
-      }
-    });
-
-    // Guardar pedido en MongoDB
-    const nuevoPedido = new Pedido({
-      productoId: productId,
-      productoNombre: producto.nombre,
-      precioPagado: producto.precio / 100,
-      stripeSessionId: session.id,
-      status: 'pending'
-    });
-
-    await nuevoPedido.save();
-    console.log(`🛒 Pedido guardado: ${producto.nombre} - ${session.id}`);
-
-    res.json({ 
-      success: true, 
-      sessionId: session.id 
-    });
-
-  } catch (error) {
-    console.error('Error creando pago:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 2. Webhook para pagos exitosos (AUTOMÁTICO)
+// 🔥 CAMBIO CRÍTICO: Webhook PRIMERO con raw body
 app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   
@@ -210,6 +121,95 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
   } catch (err) {
     console.log('❌ Error webhook:', err.message);
     res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+});
+
+// 🎯 MIDDLEWARE NORMAL para todas las otras rutas
+app.use(cors({
+  origin: ['https://prodbymtr.netlify.app', 'http://localhost:3000'],
+  credentials: true
+}));
+app.use(express.json());
+
+// Datos de productos (podés mover a MongoDB después)
+const productos = {
+  'drumkit-essential': {
+    nombre: 'Drumkit Essential',
+    precio: 2500, // $25.00 en centavos
+    descargaUrl: 'https://drive.google.com/tu-enlace-drumkit'
+  },
+  'vocal-template': {
+    nombre: 'Vocal Chain Template', 
+    precio: 2500,
+    descargaUrl: 'https://drive.google.com/tu-enlace-vocal'
+  },
+  'plantillas-fl': {
+    nombre: 'Plantillas FL Studio',
+    precio: 3500,
+    descargaUrl: 'https://drive.google.com/tu-enlace-plantillas'
+  },
+  'bundle-completo': {
+    nombre: 'Bundle Completo',
+    precio: 5500, 
+    descargaUrl: 'https://drive.google.com/tu-enlace-bundle'
+  }
+};
+
+// 1. Endpoint para crear sesión de pago
+app.post('/api/crear-pago', async (req, res) => {
+  try {
+    const { productId } = req.body;
+    
+    if (!productos[productId]) {
+      return res.status(400).json({ error: 'Producto no encontrado' });
+    }
+
+    const producto = productos[productId];
+
+    // Crear sesión en Stripe
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: producto.nombre,
+              description: 'Producto digital - ProdByMTR'
+            },
+            unit_amount: producto.precio,
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${process.env.FRONTEND_URL}/success.html`,
+      cancel_url: `${process.env.FRONTEND_URL}/`,
+      metadata: {
+        product_id: productId
+      }
+    });
+
+    // Guardar pedido en MongoDB
+    const nuevoPedido = new Pedido({
+      productoId: productId,
+      productoNombre: producto.nombre,
+      precioPagado: producto.precio / 100,
+      stripeSessionId: session.id,
+      status: 'pending'
+    });
+
+    await nuevoPedido.save();
+    console.log(`🛒 Pedido guardado: ${producto.nombre} - ${session.id}`);
+
+    res.json({ 
+      success: true, 
+      sessionId: session.id 
+    });
+
+  } catch (error) {
+    console.error('Error creando pago:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
