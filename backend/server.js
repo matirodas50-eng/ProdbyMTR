@@ -31,7 +31,10 @@ const transporter = nodemailer.createTransport({
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['https://prodbymtr.netlify.app', 'http://localhost:3000'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Datos de productos (podés mover a MongoDB después)
