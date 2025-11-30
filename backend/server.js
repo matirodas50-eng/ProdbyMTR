@@ -61,7 +61,7 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
       // ENVIAR EMAIL AUTOMÁTICO
      try {
   await resend.emails.send({
-    from: 'ProdByMTR <onboarding@resend.dev>',
+    from: 'ProdByMTR <ventas@prodbymtr.resend.dev>',
     to: session.customer_details.email,
     subject: `✅ Tu compra en ProdByMTR - ${producto.nombre}`,
     html: `
