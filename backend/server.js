@@ -10,6 +10,7 @@ dotenv.config();
 
 const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Conectar a MongoDB Atlas
 console.log('🔗 Conectando a MongoDB Atlas...');
