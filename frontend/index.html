@@ -488,7 +488,7 @@
             try {
                 console.log('🛒 Iniciando compra:', productId);
                 
-                const response = await fetch('http://localhost:3001/api/crear-pago', {
+                const response = await fetch('https://prodbymtr-backend.onrender.com/api/crear-pago', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
