@@ -57,7 +57,8 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
         console.log('❌ Producto no encontrado');
         return res.status(404).json({ error: 'Producto no encontrado' });
       }
-            // ENVIAR EMAIL AUTOMÁTICO
+
+      // ENVIAR EMAIL AUTOMÁTICO
       try {
         console.log('🔍 DEBUG: Intentando enviar email con Resend...');
         console.log('🔍 DEBUG: API Key:', process.env.RESEND_API_KEY ? '✅ Existe' : '❌ No existe');
@@ -111,6 +112,8 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
         console.error('❌ Error REAL enviando email:', emailError);
         console.error('❌ Error details:', emailError.message);
       }
+    } // ← ESTA LÍNEA FALTABA - cierra el if (event.type === 'checkout.session.completed')
+
     res.json({ received: true });
 
   } catch (err) {
