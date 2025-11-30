@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { Resend } from 'resend';
 import Pedido from './models/Pedido.js';
 
 dotenv.config();
@@ -19,9 +20,6 @@ try {
   console.error('❌ Error conectando a MongoDB:', error);
   process.exit(1);
 }
-
-import { Resend } from 'resend';
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 // 🔥 CAMBIO CRÍTICO: Webhook PRIMERO con raw body
 app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, res) => {
