@@ -64,7 +64,7 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
         console.log('🔍 DEBUG: API Key:', process.env.RESEND_API_KEY ? '✅ Existe' : '❌ No existe');
         
         const result = await resend.emails.send({
-          from: 'ProdByMTR <ventas@prodbymtr.resend.dev>',
+          from: 'ProdByMTR <onboarding@resend.dev>', 
           to: session.customer_details.email,
           subject: `✅ Tu compra en ProdByMTR - ${producto.nombre}`,
           html: `
