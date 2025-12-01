@@ -128,7 +128,7 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
 
 // 🎯 MIDDLEWARE NORMAL para todas las otras rutas
 app.use(cors({
-  origin: ['https://prodbymtr.netlify.app', 'http://localhost:3000'],
+  origin: [ 'https://matirodas50-eng.github.io', 'http://localhost:3000'],
   credentials: true
 }));
 app.use(express.json());
