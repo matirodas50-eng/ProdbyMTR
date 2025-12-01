@@ -3,14 +3,14 @@ import Stripe from 'stripe';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import Mailjet from 'node-mailjet'; // ← CAMBIADO
+import Mailjet from 'node-mailjet';
 import Pedido from './models/Pedido.js';
 
 dotenv.config();
 
 const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const mailjet = Mailjet.apiConnect( // ← CAMBIADO
+const mailjet = Mailjet.apiConnect(
   process.env.MAILJET_API_KEY,
   process.env.MAILJET_SECRET_KEY
 );
@@ -65,9 +65,10 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
       try {
         console.log('🔍 DEBUG: Intentando enviar email con Mailjet...');
         
-        const result = await mailjet.post('send', { version: 'v3.1' }).request({
+        // 1. Email al CLIENTE
+        const resultCliente = await mailjet.post('send', { version: 'v3.1' }).request({
           Messages: [{
-            From: { Email: 'prodbymtr@gmail.com', Name: 'ProdByMTR' },
+            From: { Email: 'matirodas50@gmail.com', Name: 'ProdByMTR' },
             To: [{ Email: session.customer_details.email }],
             Subject: `✅ Tu compra en ProdByMTR - ${producto.nombre}`,
             HTMLPart: `
@@ -92,29 +93,43 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
                     El enlace es válido por 30 días. Si tenés problemas, contactame.
                   </p>
                 </div>
+            `
+          }]
+        });
 
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
-                  <p>¿Necesitás ayuda? Contactame:</p>
-                  <p>📧 Email: matirodas50@gmail.com</p>
-                  <p>📱 WhatsApp: +595983775018</p>
+        // 2. Email SIMPLE a VOS
+        const resultTuCopia = await mailjet.post('send', { version: 'v3.1' }).request({
+          Messages: [{
+            From: { Email: 'matirodas50@gmail.com', Name: 'ProdByMTR' },
+            To: [{ Email: 'matirodas50@gmail.com' }],
+            Subject: `🛒 NUEVA VENTA - ${producto.nombre}`,
+            HTMLPart: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2>🛒 NUEVA VENTA - ${producto.nombre}</h2>
+                
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin: 15px 0;">
+                  <p><strong>Producto:</strong> ${producto.nombre}</p>
+                  <p><strong>Precio:</strong> $${pedido.precioPagado} USD</p>
+                  <p><strong>Cliente:</strong> ${session.customer_details.email}</p>
+                  <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</p>
+                  <p><strong>Hora:</strong> ${new Date().toLocaleTimeString('es-ES')}</p>
                 </div>
               </div>
             `
           }]
         });
 
-        console.log('🔍 DEBUG: Respuesta Mailjet:', result.body);
+        console.log('🔍 DEBUG: Email al cliente:', resultCliente.body);
+        console.log('🔍 DEBUG: Email a vos:', resultTuCopia.body);
         
-        // Marcar como enviado
         pedido.descargaEnviada = true;
         await pedido.save();
 
-        console.log(`📧 Email enviado a: ${session.customer_details.email}`);
-        console.log(`🎵 Producto enviado: ${producto.nombre}`);
+        console.log(`📧 Email enviado a cliente: ${session.customer_details.email}`);
+        console.log(`📧 Email enviado a vos: matirodas50@gmail.com`);
 
       } catch (emailError) {
-        console.error('❌ Error REAL enviando email:', emailError);
-        console.error('❌ Error details:', emailError.message);
+        console.error('❌ Error enviando email:', emailError);
       }
     }
 
