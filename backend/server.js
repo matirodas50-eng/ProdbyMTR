@@ -3,14 +3,17 @@ import Stripe from 'stripe';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { Resend } from 'resend';
+import Mailjet from 'node-mailjet'; // ← CAMBIADO
 import Pedido from './models/Pedido.js';
 
 dotenv.config();
 
 const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const resend = new Resend(process.env.RESEND_API_KEY);
+const mailjet = Mailjet.apiConnect( // ← CAMBIADO
+  process.env.MAILJET_API_KEY,
+  process.env.MAILJET_SECRET_KEY
+);
 
 // Conectar a MongoDB Atlas
 console.log('🔗 Conectando a MongoDB Atlas...');
@@ -60,46 +63,47 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
 
       // ENVIAR EMAIL AUTOMÁTICO
       try {
-        console.log('🔍 DEBUG: Intentando enviar email con Resend...');
-        console.log('🔍 DEBUG: API Key:', process.env.RESEND_API_KEY ? '✅ Existe' : '❌ No existe');
+        console.log('🔍 DEBUG: Intentando enviar email con Mailjet...');
         
-        const result = await resend.emails.send({
-          from: 'ProdByMTR <onboarding@resend.dev>', 
-          to: session.customer_details.email,
-          subject: `✅ Tu compra en ProdByMTR - ${producto.nombre}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h1 style="color: #635bff;">¡Gracias por tu compra!</h1>
-              
-              <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h2>📦 Detalles de tu compra:</h2>
-                <p><strong>Producto:</strong> ${producto.nombre}</p>
-                <p><strong>Precio:</strong> $${pedido.precioPagado} USD</p>
-                <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</p>
-              </div>
+        const result = await mailjet.post('send', { version: 'v3.1' }).request({
+          Messages: [{
+            From: { Email: 'prodbymtr@gmail.com', Name: 'ProdByMTR' },
+            To: [{ Email: session.customer_details.email }],
+            Subject: `✅ Tu compra en ProdByMTR - ${producto.nombre}`,
+            HTMLPart: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h1 style="color: #635bff;">¡Gracias por tu compra!</h1>
+                
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                  <h2>📦 Detalles de tu compra:</h2>
+                  <p><strong>Producto:</strong> ${producto.nombre}</p>
+                  <p><strong>Precio:</strong> $${pedido.precioPagado} USD</p>
+                  <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</p>
+                </div>
 
-              <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h2>⬇️ Descarga tu producto:</h2>
-                <a href="${producto.descargaUrl}" 
-                   style="background: #635bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 10px 0;"
-                   target="_blank">
-                   DESCARGAR AHORA - ${producto.nombre}
-                </a>
-                <p style="color: #666; font-size: 14px; margin-top: 10px;">
-                  El enlace es válido por 30 días. Si tenés problemas, contactame.
-                </p>
-              </div>
+                <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                  <h2>⬇️ Descarga tu producto:</h2>
+                  <a href="${producto.descargaUrl}" 
+                     style="background: #635bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 10px 0;"
+                     target="_blank">
+                     DESCARGAR AHORA - ${producto.nombre}
+                  </a>
+                  <p style="color: #666; font-size: 14px; margin-top: 10px;">
+                    El enlace es válido por 30 días. Si tenés problemas, contactame.
+                  </p>
+                </div>
 
-              <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
-                <p>¿Necesitás ayuda? Contactame:</p>
-                <p>📧 Email: matirodas50@gmail.com</p>
-                <p>📱 WhatsApp: +595983775018</p>
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                  <p>¿Necesitás ayuda? Contactame:</p>
+                  <p>📧 Email: matirodas50@gmail.com</p>
+                  <p>📱 WhatsApp: +595983775018</p>
+                </div>
               </div>
-            </div>
-          `
+            `
+          }]
         });
 
-        console.log('🔍 DEBUG: Respuesta de Resend:', result);
+        console.log('🔍 DEBUG: Respuesta Mailjet:', result.body);
         
         // Marcar como enviado
         pedido.descargaEnviada = true;
@@ -112,7 +116,7 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
         console.error('❌ Error REAL enviando email:', emailError);
         console.error('❌ Error details:', emailError.message);
       }
-    } // ← ESTA LÍNEA FALTABA - cierra el if (event.type === 'checkout.session.completed')
+    }
 
     res.json({ received: true });
 
@@ -133,7 +137,7 @@ app.use(express.json());
 const productos = {
   'drumkit-essential': {
     nombre: 'Drumkit Essential',
-    precio: 2500, // $25.00 en centavos
+    precio: 2500,
     descargaUrl: 'https://drive.google.com/tu-enlace-drumkit'
   },
   'vocal-template': {
@@ -164,7 +168,6 @@ app.post('/api/crear-pago', async (req, res) => {
 
     const producto = productos[productId];
 
-    // Crear sesión en Stripe
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -188,7 +191,6 @@ app.post('/api/crear-pago', async (req, res) => {
       }
     });
 
-    // Guardar pedido en MongoDB
     const nuevoPedido = new Pedido({
       productoId: productId,
       productoNombre: producto.nombre,
