@@ -73,13 +73,23 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
             Subject: `✅ Tu compra en ProdByMTR - ${producto.nombre}`,
             HTMLPart: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <!-- ANTISPAM -->
+                <meta name="format-detection" content="telephone=no">
+                <meta name="format-detection" content="date=no">
+                <meta name="format-detection" content="address=no">
+                <meta name="format-detection" content="email=no">
+                <div style="display:none;font-size:0px;line-height:0px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
+                  ${producto.nombre} - ProdByMTR - ${new Date().getFullYear()}
+                </div>
+                <!-- FIN ANTISPAM -->
+                
                 <h1 style="color: #635bff;">¡Gracias por tu compra!</h1>
                 
                 <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
                   <h2>📦 Detalles de tu compra:</h2>
                   <p><strong>Producto:</strong> ${producto.nombre}</p>
                   <p><strong>Precio:</strong> $${pedido.precioPagado} USD</p>
-                  <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</p>
+                  <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES', {timeZone: 'America/Asuncion'})}</p>
                 </div>
 
                 <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
@@ -93,6 +103,13 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
                     El enlace es válido por 30 días. Si tenés problemas, contactame.
                   </p>
                 </div>
+
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                  <p>¿Necesitás ayuda? Contactame:</p>
+                  <p>📧 Email: matirodas50@gmail.com</p>
+                  <p>📱 WhatsApp: +595983775018</p>
+                </div>
+              </div>
             `
           }]
         });
@@ -105,14 +122,24 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
             Subject: `🛒 NUEVA VENTA - ${producto.nombre}`,
             HTMLPart: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <!-- ANTISPAM -->
+                <meta name="format-detection" content="telephone=no">
+                <meta name="format-detection" content="date=no">
+                <meta name="format-detection" content="address=no">
+                <meta name="format-detection" content="email=no">
+                <div style="display:none;font-size:0px;line-height:0px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
+                  ${producto.nombre} - ProdByMTR - ${new Date().getFullYear()}
+                </div>
+                <!-- FIN ANTISPAM -->
+                
                 <h2>🛒 NUEVA VENTA - ${producto.nombre}</h2>
                 
                 <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin: 15px 0;">
                   <p><strong>Producto:</strong> ${producto.nombre}</p>
                   <p><strong>Precio:</strong> $${pedido.precioPagado} USD</p>
                   <p><strong>Cliente:</strong> ${session.customer_details.email}</p>
-                  <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</p>
-                  <p><strong>Hora:</strong> ${new Date().toLocaleTimeString('es-ES')}</p>
+                  <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES', {timeZone: 'America/Asuncion'})}</p>
+                  <p><strong>Hora:</strong> ${new Date().toLocaleTimeString('es-ES', {timeZone: 'America/Asuncion'})}</p>
                 </div>
               </div>
             `
