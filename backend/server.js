@@ -1,10 +1,10 @@
 import express from 'express';
 import Stripe from 'stripe';
-import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import Mailjet from 'node-mailjet';
-import Pedido from './models/Pedido.js';
+import pg from 'pg';
+const { Pool } = pg;
 
 dotenv.config();
 
@@ -15,15 +15,23 @@ const mailjet = Mailjet.apiConnect(
   process.env.MAILJET_SECRET_KEY
 );
 
-// Conectar a MongoDB Atlas
-console.log('🔗 Conectando a MongoDB Atlas...');
-try {
-  await mongoose.connect(process.env.MONGODB_URI);
-  console.log('✅ MongoDB Atlas conectado exitosamente!');
-} catch (error) {
-  console.error('❌ Error conectando a MongoDB:', error);
-  process.exit(1);
-}
+// ✅ CONEXIÓN A POSTGRESQL (NEON) - NO MONGODB
+console.log('🔗 Conectando a Neon PostgreSQL...');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: true }
+});
+
+// Verificar conexión PostgreSQL
+(async () => {
+  try {
+    await pool.query('SELECT NOW()');
+    console.log('✅ PostgreSQL (Neon) conectado!');
+  } catch (error) {
+    console.error('❌ Error conectando a PostgreSQL:', error);
+    process.exit(1);
+  }
+})();
 
 // 🔥 CAMBIO CRÍTICO: Webhook PRIMERO con raw body
 app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, res) => {
@@ -40,21 +48,31 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
       console.log('Email:', session.customer_details.email);
       console.log('Producto:', session.metadata.product_id);
 
-      // Buscar pedido en MongoDB
-      const pedido = await Pedido.findOne({ stripeSessionId: session.id });
+      // ✅ BUSCAR PEDIDO EN POSTGRESQL (NO MONGODB)
+      const pedidoResult = await pool.query(
+        'SELECT * FROM pedidos WHERE stripe_session_id = $1',
+        [session.id]
+      );
       
-      if (!pedido) {
-        console.log('❌ Pedido no encontrado en MongoDB');
+      if (!pedidoResult.rows[0]) {
+        console.log('❌ Pedido no encontrado en PostgreSQL');
         return res.status(404).json({ error: 'Pedido no encontrado' });
       }
 
-      // Actualizar pedido
-      pedido.status = 'completed';
-      pedido.clienteEmail = session.customer_details.email;
-      await pedido.save();
+      const pedido = pedidoResult.rows[0];
+
+      // ✅ ACTUALIZAR PEDIDO EN POSTGRESQL
+      await pool.query(`
+        UPDATE pedidos 
+        SET status = 'completed', 
+            cliente_email = $1,
+            descarga_enviada = true,
+            actualizado_en = NOW()
+        WHERE stripe_session_id = $2
+      `, [session.customer_details.email, session.id]);
 
       // Obtener datos del producto
-      const producto = productos[pedido.productoId];
+      const producto = productos[pedido.producto_id];
       
       if (!producto) {
         console.log('❌ Producto no encontrado');
@@ -88,7 +106,7 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
                 <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
                   <h2>📦 Detalles de tu compra:</h2>
                   <p><strong>Producto:</strong> ${producto.nombre}</p>
-                  <p><strong>Precio:</strong> $${pedido.precioPagado} USD</p>
+                  <p><strong>Precio:</strong> $${pedido.precio_pagado} USD</p>
                   <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES', {timeZone: 'America/Asuncion'})}</p>
                 </div>
 
@@ -136,7 +154,7 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
                 
                 <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin: 15px 0;">
                   <p><strong>Producto:</strong> ${producto.nombre}</p>
-                  <p><strong>Precio:</strong> $${pedido.precioPagado} USD</p>
+                  <p><strong>Precio:</strong> $${pedido.precio_pagado} USD</p>
                   <p><strong>Cliente:</strong> ${session.customer_details.email}</p>
                   <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES', {timeZone: 'America/Asuncion'})}</p>
                   <p><strong>Hora:</strong> ${new Date().toLocaleTimeString('es-ES', {timeZone: 'America/Asuncion'})}</p>
@@ -149,9 +167,6 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
         console.log('🔍 DEBUG: Email al cliente:', resultCliente.body);
         console.log('🔍 DEBUG: Email a vos:', resultTuCopia.body);
         
-        pedido.descargaEnviada = true;
-        await pedido.save();
-
         console.log(`📧 Email enviado a cliente: ${session.customer_details.email}`);
         console.log(`📧 Email enviado a vos: matirodas50@gmail.com`);
 
@@ -175,7 +190,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Datos de productos (podés mover a MongoDB después)
+// Datos de productos
 const productos = {
   'drumkit-essential': {
     nombre: 'Drumkit Essential',
@@ -199,7 +214,7 @@ const productos = {
   }
 };
 
-// 1. Endpoint para crear sesión de pago
+// 1. Endpoint para crear sesión de pago (POSTGRESQL)
 app.post('/api/crear-pago', async (req, res) => {
   try {
     const { productId } = req.body;
@@ -233,16 +248,19 @@ app.post('/api/crear-pago', async (req, res) => {
       }
     });
 
-    const nuevoPedido = new Pedido({
-      productoId: productId,
-      productoNombre: producto.nombre,
-      precioPagado: producto.precio / 100,
-      stripeSessionId: session.id,
-      status: 'pending'
-    });
+    // ✅ GUARDAR EN POSTGRESQL (NO MONGODB)
+    await pool.query(`
+      INSERT INTO pedidos 
+      (producto_id, producto_nombre, precio_pagado, stripe_session_id, status)
+      VALUES ($1, $2, $3, $4, 'pending')
+    `, [
+      productId,
+      producto.nombre,
+      producto.precio / 100,  // Convertir centavos a dólares
+      session.id
+    ]);
 
-    await nuevoPedido.save();
-    console.log(`🛒 Pedido guardado: ${producto.nombre} - ${session.id}`);
+    console.log(`🛒 Pedido guardado en PostgreSQL: ${producto.nombre} - ${session.id}`);
 
     res.json({ 
       success: true, 
@@ -255,28 +273,40 @@ app.post('/api/crear-pago', async (req, res) => {
   }
 });
 
-// 3. Endpoint para ver pedidos
+// 3. Endpoint para ver pedidos (POSTGRESQL)
 app.get('/api/pedidos', async (req, res) => {
   try {
-    const pedidos = await Pedido.find().sort({ createdAt: -1 });
-    res.json({ success: true, pedidos });
+    const result = await pool.query(`
+      SELECT * FROM pedidos 
+      ORDER BY creado_en DESC
+    `);
+    res.json({ success: true, pedidos: result.rows });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 4. Health check
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
-    timestamp: new Date().toISOString()
-  });
+// 4. Health check (POSTGRESQL)
+app.get('/api/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ 
+      status: 'OK', 
+      database: 'PostgreSQL (Neon) Connected',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      status: 'ERROR', 
+      database: 'PostgreSQL Disconnected',
+      error: error.message 
+    });
+  }
 });
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-  console.log(`📊 MongoDB: ${mongoose.connection.readyState === 1 ? 'Conectado' : 'Desconectado'}`);
   console.log(`💳 Stripe: Modo ${process.env.STRIPE_SECRET_KEY.includes('test') ? 'TEST' : 'LIVE'}`);
+  console.log(`🗄️  Base de datos: PostgreSQL (Neon)`);
 });
