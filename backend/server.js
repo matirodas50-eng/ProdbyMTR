@@ -19,7 +19,7 @@ const mailjet = Mailjet.apiConnect(
 console.log('🔗 Conectando a Neon PostgreSQL...');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: true }
+  ssl: { rejectUnauthorized: false }
 });
 
 // Verificar conexión PostgreSQL
