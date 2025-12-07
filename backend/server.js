@@ -23,7 +23,7 @@ console.log('🔗 Conectando a Neon PostgreSQL...');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  connectionTimeoutMillis: 10000, // 10 seg timeout
+  connectionTimeoutMillis: 10000,
   idleTimeoutMillis: 30000,
   max: 10
 });
@@ -41,7 +41,7 @@ const pool = new Pool({
   }
 })();
 
-// ==================== WEBHOOK (Primero - RAW BODY) ====================
+// ==================== WEBHOOK ====================
 app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   
@@ -57,7 +57,6 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
       console.log('Producto:', session.metadata.product_id);
 
       try {
-        // Buscar pedido en PostgreSQL
         const pedidoResult = await pool.query(
           'SELECT * FROM pedidos WHERE stripe_session_id = $1',
           [session.id]
@@ -70,7 +69,6 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
 
         const pedido = pedidoResult.rows[0];
 
-        // Actualizar pedido
         await pool.query(`
           UPDATE pedidos 
           SET status = 'completed', 
@@ -80,7 +78,6 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
           WHERE stripe_session_id = $2
         `, [session.customer_details.email, session.id]);
 
-        // Obtener datos del producto
         const producto = productos[pedido.producto_id];
         
         if (!producto) {
@@ -88,10 +85,7 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
           return res.status(404).json({ error: 'Producto no encontrado' });
         }
 
-        // ENVIAR EMAIL AUTOMÁTICO
-        console.log('📧 Enviando email automático...');
-        
-        // 1. Email al CLIENTE
+        // ENVIAR EMAIL AL CLIENTE
         await mailjet.post('send', { version: 'v3.1' }).request({
           Messages: [{
             From: { Email: 'matirodas50@gmail.com', Name: 'ProdByMTR' },
@@ -127,7 +121,7 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
           }]
         });
 
-        // 2. Email a VOS
+        // EMAIL A VOS
         await mailjet.post('send', { version: 'v3.1' }).request({
           Messages: [{
             From: { Email: 'matirodas50@gmail.com', Name: 'ProdByMTR' },
@@ -162,40 +156,65 @@ app.post('/api/webhook', express.raw({type: 'application/json'}), async (req, re
   }
 });
 
-// ==================== MIDDLEWARE PARA RUTAS NORMALES ====================
+// ==================== MIDDLEWARE ====================
 app.use(cors({
   origin: ['https://matirodas50-eng.github.io', 'http://localhost:3000'],
   credentials: true
 }));
 app.use(express.json());
 
-// ==================== DATOS DE PRODUCTOS ====================
+// ==================== DATOS DE 9 PRODUCTOS ====================
 const productos = {
   'drumkit-essential': {
-    nombre: 'Drumkit Essential',
-    precio: 2500,
-    descargaUrl: 'https://drive.google.com/your-drumkit-link'
+    nombre: 'DRUMKIT ESSENTIAL',
+    precio: 2500, // $25 USD
+    descargaUrl: 'https://drive.google.com/tu-enlace-drumkit'
   },
   'vocal-template': {
-    nombre: 'Vocal Chain Template', 
-    precio: 2500,
-    descargaUrl: 'https://drive.google.com/your-vocal-link'
+    nombre: 'VOCAL CHAIN TEMPLATE', 
+    precio: 1700, // $17 USD
+    descargaUrl: 'https://drive.google.com/tu-enlace-vocal'
   },
   'plantillas-fl': {
-    nombre: 'Plantillas FL Studio',
-    precio: 3500,
-    descargaUrl: 'https://drive.google.com/your-templates-link'
+    nombre: 'PLANTILLAS FL STUDIO',
+    precio: 2900, // $29 USD
+    descargaUrl: 'https://drive.google.com/tu-enlace-plantillas'
+  },
+  'cumbia-420': {
+    nombre: 'CUMBIA 420 - DRUMKIT',
+    precio: 1800, // $18 USD
+    descargaUrl: 'https://drive.google.com/tu-enlace-cumbia'
+  },
+  'reggaeton-hits': {
+    nombre: 'REGGAETON HITS - DRUMKIT',
+    precio: 2000, // $20 USD
+    descargaUrl: 'https://drive.google.com/tu-enlace-reggaeton'
+  },
+  'trap-essentials': {
+    nombre: 'TRAP ESSENTIALS - PACK',
+    precio: 2200, // $22 USD
+    descargaUrl: 'https://drive.google.com/tu-enlace-trap'
+  },
+  'synthwave-pop': {
+    nombre: 'SYNTHWAVE & POP - PACK',
+    precio: 2500, // $25 USD
+    descargaUrl: 'https://drive.google.com/tu-enlace-synthwave'
+  },
+  'bundle-generos': {
+    nombre: 'BUNDLE DE GÉNEROS',
+    precio: 6500, // $65 USD
+    descargaUrl: 'https://drive.google.com/tu-enlace-bundle-generos'
   },
   'bundle-completo': {
-    nombre: 'Bundle Completo',
-    precio: 5500, 
-    descargaUrl: 'https://drive.google.com/your-bundle-link'
+    nombre: 'BUNDLE COMPLETO',
+    precio: 9900, // $99 USD
+    descargaUrl: 'https://drive.google.com/tu-enlace-bundle-completo'
   }
 };
 
 // ==================== ENDPOINTS ====================
 
-// 1. Health Check optimizado para Render (responde rápido)
+// 1. Health Check
 app.get('/api/health', async (req, res) => {
   res.json({ 
     status: 'OK',
@@ -205,18 +224,17 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
-// 2. Warm-up endpoint para evitar cold start
+// 2. Warm-up endpoint
 app.get('/api/warmup', (req, res) => {
   console.log('🔥 Servidor calentado por petición');
   res.json({ warmed: true, time: new Date().toISOString() });
 });
 
-// 3. Endpoint MEJORADO para crear pago con manejo de cold start
+// 3. Endpoint para crear pago
 app.post('/api/crear-pago', async (req, res) => {
   console.log('🛒 Recibiendo solicitud de pago...');
   
-  // Configurar timeout
-  req.setTimeout(25000); // 25 segundos máximo
+  req.setTimeout(25000);
   
   try {
     const { productId } = req.body;
@@ -230,7 +248,6 @@ app.post('/api/crear-pago', async (req, res) => {
 
     const producto = productos[productId];
 
-    // Crear sesión en Stripe
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
@@ -248,10 +265,10 @@ app.post('/api/crear-pago', async (req, res) => {
       success_url: `${process.env.FRONTEND_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}/?canceled=true`,
       metadata: { product_id: productId },
-      expires_at: Math.floor(Date.now() / 1000) + 1800 // 30 minutos
+      expires_at: Math.floor(Date.now() / 1000) + 1800
     });
 
-    // Intentar guardar en PostgreSQL (pero no fallar si no hay conexión)
+    // Guardar en PostgreSQL
     try {
       await pool.query(`
         INSERT INTO pedidos 
@@ -266,7 +283,6 @@ app.post('/api/crear-pago', async (req, res) => {
       console.log(`✅ Pedido guardado en PostgreSQL: ${session.id}`);
     } catch (dbError) {
       console.warn('⚠️  Pedido NO guardado en DB (modo offline):', dbError.message);
-      // Continuamos aunque falle la DB
     }
 
     console.log(`✅ Sesión Stripe creada: ${session.id}`);
@@ -274,14 +290,12 @@ app.post('/api/crear-pago', async (req, res) => {
     res.json({ 
       success: true, 
       sessionId: session.id,
-      message: 'Redirigiendo a Stripe...',
-      note: 'Si la página tarda, el servidor gratuito está iniciando (máx. 30 segundos)'
+      message: 'Redirigiendo a Stripe...'
     });
 
   } catch (error) {
     console.error('❌ Error creando pago:', error.message);
     
-    // Errores amigables
     let statusCode = 500;
     let errorMessage = error.message;
     let userMessage = 'Error inesperado. Por favor, intentá de nuevo.';
@@ -297,8 +311,7 @@ app.post('/api/crear-pago', async (req, res) => {
     res.status(statusCode).json({ 
       success: false, 
       error: errorMessage,
-      message: userMessage,
-      help: 'Si el problema persiste, contactá a matirodas50@gmail.com'
+      message: userMessage
     });
   }
 });
@@ -339,4 +352,5 @@ app.listen(PORT, () => {
   console.log(`🌍 Frontend: ${process.env.FRONTEND_URL}`);
   console.log(`⏰ Hora servidor: ${new Date().toLocaleString('es-ES', {timeZone: 'America/Asuncion'})}`);
   console.log('✅ Listo para recibir pagos!');
+  console.log(`📦 Productos cargados: ${Object.keys(productos).length}`);
 });
